@@ -1,0 +1,407 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - email: string (required, email format)
+    //   - role: string (required, enum: ['admin', 'staff', 'user'])
+    //   - displayName: string (optional)
+    //   - createdAt: string (required, ISO 8601)
+    //
+    // Collection: clients
+    // Document ID: {clientId}
+    // Fields:
+    //   - name: string (required)
+    //   - phone: string (optional)
+    //   - email: string (optional, email format)
+    //   - address: string (optional)
+    //   - createdAt: string (required, ISO 8601)
+    //
+    // Collection: services
+    // Document ID: {serviceId}
+    // Fields:
+    //   - name: string (required)
+    //   - price: number (required, positive)
+    //   - description: string (optional)
+    //   - categoryId: string (optional)
+    //   - categoryName: string (optional)
+    //
+    // Collection: categories
+    // Document ID: {categoryId}
+    // Fields:
+    //   - name: string (required)
+    //   - description: string (optional)
+    //   - createdAt: string (required, ISO 8601)
+    //
+    // Collection: invoices
+    // Document ID: {invoiceId}
+    // Fields:
+    //   - invoiceNumber: string (required)
+    //   - clientId: string (required)
+    //   - clientName: string (required)
+    //   - items: list (required)
+    //   - subtotal: number (required)
+    //   - tax: number (required)
+    //   - taxAmount: number (required)
+    //   - discount: number (required)
+    //   - total: number (required)
+    //   - status: string (required, enum: ['Paid', 'Unpaid', 'Partial'])
+    //   - createdAt: string (required, ISO 8601)
+    //   - dueDate: string (required, ISO 8601)
+    //
+    // Collection: expenses
+    // Document ID: {expenseId}
+    // Fields:
+    //   - amount: number (required, positive)
+    //   - category: string (required)
+    //   - description: string (optional)
+    //   - date: string (required, ISO 8601)
+    //   - createdAt: string (required, ISO 8601)
+    //
+    // Collection: settings
+    // Document ID: business
+    // Fields:
+    //   - companyName: string (optional)
+    //   - address: string (optional)
+    //   - phone: string (optional)
+    //   - email: string (optional, email format)
+    //   - logoUrl: string (optional, url format)
+    //   - currency: string (optional)
+    //
+    // Collection: receiving_challans
+    // Document ID: {challanId}
+    // Fields:
+    //   - challanNo: string (required)
+    //   - supplierName: string (required)
+    //   - supplierPhone: string (optional)
+    //   - date: string (required, ISO 8601)
+    //   - totalAmount: number (required)
+    //   - totalQuantity: number (required)
+    //   - createdAt: string (required, ISO 8601)
+    //
+    // Collection: receiving_challan_items
+    // Document ID: {itemId}
+    // Fields:
+    //   - challanId: string (required)
+    //   - productId: string (required)
+    //   - productName: string (required)
+    //   - barcode: string (required)
+    //   - quantity: number (required, positive)
+    //   - purchasePrice: number (required, positive)
+    //   - subtotal: number (required)
+    //
+    // Collection: expense_categories
+    // Document ID: {categoryId}
+    // Fields:
+    //   - name: string (required)
+    //   - description: string (optional)
+    //   - createdAt: string (required, ISO 8601)
+    //
+    // Collection: bank_accounts
+    // Document ID: {bankId}
+    // Fields:
+    //   - name: string (required)
+    //   - accountNumber: string (required)
+    //   - balance: number (required)
+    //   - createdAt: string (required, ISO 8601)
+    //
+    // Collection: payments
+    // Document ID: {paymentId}
+    // Fields:
+    //   - invoiceId: string (required)
+    //   - invoiceNumber: string (required)
+    //   - clientName: string (required)
+    //   - amount: number (required)
+    //   - paymentMethod: string (required)
+    //   - bankAccountId: string (optional)
+    //   - collectedBy: string (optional)
+    //   - collectedByName: string (optional)
+    //   - date: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "rashedimposetechbd@gmail.com" ||
+         request.auth.token.email == "rashedimposetech@gmail.com" ||
+         request.auth.uid == "n1zZwQXeGVbNg60sz74FlAECJa52" ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isStaff() {
+      return isAuthenticated() && 
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'staff') || isAdmin());
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && (
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$") ||
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}$")
+      );
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'role', 'displayName', 'createdAt']) &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['admin', 'staff', 'user'] &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidClient(data) {
+      return hasOnlyAllowedFields(['name', 'phone', 'email', 'address', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() < 20)) &&
+             (!('email' in data) || isValidEmail(data.email)) &&
+             (!('address' in data) || (data.address is string && data.address.size() < 500)) &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidService(data) {
+      return hasOnlyAllowedFields(['name', 'price', 'description', 'sku', 'stock', 'categoryId', 'categoryName']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.price is number && data.price >= 0 &&
+             (!('description' in data) || (data.description is string && data.description.size() < 1000)) &&
+             (!('sku' in data) || (data.sku is string && data.sku.size() < 50)) &&
+             (!('stock' in data) || data.stock is number) &&
+             (!('categoryId' in data) || data.categoryId is string) &&
+             (!('categoryName' in data) || data.categoryName is string);
+    }
+
+    function isValidCategory(data) {
+      return hasOnlyAllowedFields(['name', 'description', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             (!('description' in data) || (data.description is string && data.description.size() < 500)) &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidInvoice(data) {
+      return hasOnlyAllowedFields(['invoiceNumber', 'clientId', 'clientName', 'items', 'subtotal', 'tax', 'taxAmount', 'discount', 'total', 'paidAmount', 'dueAmount', 'status', 'createdAt', 'dueDate']) &&
+             data.invoiceNumber is string && data.invoiceNumber.size() > 0 && data.invoiceNumber.size() < 50 &&
+             data.clientId is string && data.clientId.size() < 100 &&
+             data.clientName is string && data.clientName.size() > 0 && data.clientName.size() < 100 &&
+             data.items is list && data.items.size() < 50 &&
+             data.subtotal is number &&
+             data.tax is number &&
+             data.taxAmount is number &&
+             data.discount is number &&
+             data.total is number &&
+             (!('paidAmount' in data) || data.paidAmount is number) &&
+             (!('dueAmount' in data) || data.dueAmount is number) &&
+             data.status in ['Paid', 'Unpaid', 'Partial'] &&
+             isValidDateString(data.createdAt) &&
+             isValidDateString(data.dueDate);
+    }
+
+    function isValidExpense(data) {
+      return hasOnlyAllowedFields(['amount', 'category', 'description', 'date', 'paymentMethod', 'bankAccountId', 'createdAt']) &&
+             data.amount is number && data.amount > 0 &&
+             data.category is string && data.category.size() > 0 &&
+             (!('description' in data) || (data.description is string && data.description.size() < 1000)) &&
+             (!('paymentMethod' in data) || data.paymentMethod in ['Cash', 'Bank', 'Mobile Banking']) &&
+             (!('bankAccountId' in data) || data.bankAccountId is string) &&
+             isValidDateString(data.date) &&
+             (isValidDateString(data.createdAt) || data.createdAt is timestamp);
+    }
+
+    function isValidExpenseCategory(data) {
+      return hasOnlyAllowedFields(['name', 'description', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             (!('description' in data) || (data.description is string && data.description.size() < 500)) &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidEmployee(data) {
+      return hasOnlyAllowedFields(['name', 'position', 'email', 'phone', 'joinDate', 'salary', 'status', 'createdAt', 'createAccount', 'discountLimit', 'username', 'password', 'roles', 'permissions', 'role']) &&
+             (!('name' in data) || (data.name is string && data.name.size() > 0)) &&
+             (!('position' in data) || (data.position is string && data.position.size() > 0)) &&
+             (!('email' in data) || isValidEmail(data.email)) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() < 20)) &&
+             (!('joinDate' in data) || isValidDateString(data.joinDate)) &&
+             (!('salary' in data) || data.salary is number) &&
+             (!('status' in data) || data.status in ['Active', 'Inactive']) &&
+             (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
+             (!('createAccount' in data) || data.createAccount is bool) &&
+             (!('discountLimit' in data) || data.discountLimit is number) &&
+             (!('username' in data) || (data.username is string && data.username.size() < 50)) &&
+             (!('password' in data) || (data.password is string && data.password.size() < 100)) &&
+             (!('roles' in data) || data.roles is list) &&
+             (!('permissions' in data) || data.permissions is list) &&
+             (!('role' in data) || data.role is string);
+    }
+
+    function isValidChallan(data) {
+      return hasOnlyAllowedFields(['challanNo', 'supplierName', 'supplierPhone', 'category', 'date', 'totalAmount', 'totalQuantity', 'createdAt']) &&
+             data.challanNo is string && data.challanNo.size() > 0 &&
+             data.supplierName is string && data.supplierName.size() > 0 &&
+             (!('supplierPhone' in data) || (data.supplierPhone is string)) &&
+             (!('category' in data) || (data.category is string)) &&
+             isValidDateString(data.date) &&
+             data.totalAmount is number &&
+             data.totalQuantity is number &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidChallanItem(data) {
+      return hasOnlyAllowedFields(['challanId', 'productId', 'productName', 'barcode', 'quantity', 'purchasePrice', 'subtotal']) &&
+             data.challanId is string &&
+             data.productId is string &&
+             data.productName is string &&
+             data.barcode is string &&
+             data.quantity is number && data.quantity > 0 &&
+             data.purchasePrice is number && data.purchasePrice >= 0 &&
+             data.subtotal is number;
+    }
+
+    function isValidPayment(data) {
+      return hasOnlyAllowedFields(['invoiceId', 'invoiceNumber', 'clientName', 'amount', 'paymentMethod', 'bankAccountId', 'collectedBy', 'collectedByName', 'date', 'createdAt']) &&
+             data.invoiceId is string &&
+             (!('invoiceNumber' in data) || data.invoiceNumber is string) &&
+             (!('clientName' in data) || data.clientName is string) &&
+             data.amount is number && data.amount > 0 &&
+             data.paymentMethod in ['Cash', 'Bank', 'Mobile Banking'] &&
+             (!('bankAccountId' in data) || data.bankAccountId is string) &&
+             (!('collectedBy' in data) || data.collectedBy is string) &&
+             (!('collectedByName' in data) || data.collectedByName is string) &&
+             isValidDateString(data.date) &&
+             (isValidDateString(data.createdAt) || data.createdAt is timestamp);
+    }
+
+    function isValidBankAccount(data) {
+      return hasOnlyAllowedFields(['name', 'accountNumber', 'balance', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.accountNumber is string && data.accountNumber.size() > 0 &&
+             data.balance is number &&
+             isValidDateString(data.createdAt);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    (isOwner(userId) && request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin());
+    }
+
+    match /clients/{clientId} {
+      allow read: if isStaff();
+      allow create, update: if isStaff() && isValidClient(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /services/{serviceId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidService(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /invoices/{invoiceId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && isValidInvoice(request.resource.data);
+      allow update: if isStaff() && isValidInvoice(request.resource.data) && 
+                    request.resource.data.createdAt == resource.data.createdAt &&
+                    request.resource.data.invoiceNumber == resource.data.invoiceNumber;
+      allow delete: if isAdmin();
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && isValidExpense(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /expense_categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidExpenseCategory(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /employees/{employeeId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidEmployee(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /receiving_challans/{challanId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && isValidChallan(request.resource.data);
+      allow update: if isAdmin() && isValidChallan(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /receiving_challan_items/{itemId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && isValidChallanItem(request.resource.data);
+      allow update: if isAdmin() && isValidChallanItem(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && isValidPayment(request.resource.data);
+      allow update: if isAdmin() && isValidPayment(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidCategory(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /bank_accounts/{bankId} {
+      allow read: if isStaff();
+      allow create, update: if isAdmin() && isValidBankAccount(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /settings/business {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

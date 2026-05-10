@@ -1,0 +1,249 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user roles and basic info",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "staff"] },
+        "displayName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Customer details",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "Available printing and design services (Products)",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "description": { "type": "string" },
+        "sku": { "type": "string" },
+        "stock": { "type": "number" },
+        "categoryId": { "type": "string" },
+        "categoryName": { "type": "string" }
+      },
+      "required": ["name", "price"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product categories",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Billing document",
+      "type": "object",
+      "properties": {
+        "invoiceNumber": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "serviceId": { "type": "string" },
+              "serviceName": { "type": "string" },
+              "quantity": { "type": "number" },
+              "price": { "type": "number" },
+              "total": { "type": "number" }
+            }
+          }
+        },
+        "subtotal": { "type": "number" },
+        "tax": { "type": "number" },
+        "taxAmount": { "type": "number" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "dueAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["Paid", "Unpaid", "Partial"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "dueDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["invoiceNumber", "clientId", "total", "status"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "Business costs",
+      "type": "object",
+      "properties": {
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "paymentMethod": { "type": "string", "enum": ["Cash", "Bank", "Mobile Banking"] },
+        "bankAccountId": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["amount", "category", "date"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Employee information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "position": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "joinDate": { "type": "string", "format": "date-time" },
+        "salary": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "createAccount": { "type": "boolean" },
+        "discountLimit": { "type": "number" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "roles": { "type": "array", "items": { "type": "string" } },
+        "permissions": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["name", "position", "joinDate"]
+    },
+    "BusinessSettings": {
+      "title": "Business Settings",
+      "description": "Company configuration",
+      "type": "object",
+      "properties": {
+        "companyName": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "logoUrl": { "type": "string" },
+        "currency": { "type": "string" }
+      }
+    },
+    "ReceivingChallan": {
+      "title": "Receiving Challan",
+      "description": "Inventory receiving document",
+      "type": "object",
+      "properties": {
+        "challanNo": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "supplierPhone": { "type": "string" },
+        "category": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "totalAmount": { "type": "number" },
+        "totalQuantity": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["challanNo", "supplierName", "date", "totalAmount"]
+    },
+    "ReceivingChallanItem": {
+      "title": "Receiving Challan Item",
+      "description": "Items within a receiving challan",
+      "type": "object",
+      "properties": {
+        "challanId": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "barcode": { "type": "string" },
+        "quantity": { "type": "number" },
+        "purchasePrice": { "type": "number" },
+        "subtotal": { "type": "number" }
+      },
+      "required": ["challanId", "productId", "quantity", "purchasePrice"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment transaction for an invoice",
+      "type": "object",
+      "properties": {
+        "invoiceId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "clientName": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["Cash", "Bank", "Mobile Banking"] },
+        "bankAccountId": { "type": "string" },
+        "collectedBy": { "type": "string" },
+        "collectedByName": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["invoiceId", "amount", "paymentMethod", "date"]
+    },
+    "BankAccount": {
+      "title": "Bank Account",
+      "description": "Stores bank account details and balance",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "balance": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "accountNumber", "balance"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profiles and roles"
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Customer records"
+    },
+    "/services/{serviceId}": {
+      "schema": "Service",
+      "description": "Service catalog"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Invoices and billing"
+    },
+    "/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Expense tracking"
+    },
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Employee records"
+    },
+    "/settings/business": {
+      "schema": "BusinessSettings",
+      "description": "Global business settings"
+    },
+    "/receiving_challans/{challanId}": {
+      "schema": "ReceivingChallan",
+      "description": "Inventory receiving records"
+    },
+    "/receiving_challan_items/{itemId}": {
+      "schema": "ReceivingChallanItem",
+      "description": "Individual items in receiving challans"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Payment transaction records"
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Product categories"
+    },
+    "/bank_accounts/{bankId}": {
+      "schema": "BankAccount",
+      "description": "Bank account records"
+    }
+  }
+}
